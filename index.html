@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>京成線・浅草線 トイレマップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* 路線図のように駅を縦に並べ、駅ごとにトイレの中身をチップで見せる。上に「いまいる駅→向かう駅」の検索 */
+:root {
+  --paper: #f6f7f9;
+  --card: #ffffff;
+  --ink: #1b2330;
+  --muted: #6b7584;
+  --rule: #dfe3e9;
+  --keisei: #1f56a8;
+  --asakusa: #d6407f;
+  --known: #0f7a55;
+  --known-bg: #e3f4ec;
+  --warn: #9a5b00;
+  --warn-bg: #fdf0db;
+  --unknown-bg: #eef0f3;
+  --font: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161c; --card: #1b2129; --ink: #e8ecf1; --muted: #9aa4b2; --rule: #2c343f;
+    --keisei: #6f9fe8; --asakusa: #f07aac; --known: #5fd0a2; --known-bg: #183a2e;
+    --warn: #f0b45a; --warn-bg: #3a2c16; --unknown-bg: #232a33;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161c; --card: #1b2129; --ink: #e8ecf1; --muted: #9aa4b2; --rule: #2c343f;
+  --keisei: #6f9fe8; --asakusa: #f07aac; --known: #5fd0a2; --known-bg: #183a2e;
+  --warn: #f0b45a; --warn-bg: #3a2c16; --unknown-bg: #232a33;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font); line-height: 1.55; font-size: 16px; }
+.wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 16px; }
+h1 { font-size: 1.35rem; margin: 0; text-wrap: balance; }
+.lead { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+button { font: inherit; }
+:focus-visible { outline: 3px solid var(--keisei); outline-offset: 2px; }
+
+.seg { display: inline-grid; grid-template-columns: 1fr 1fr; background: var(--unknown-bg); border-radius: 999px; padding: 4px; gap: 4px; justify-self: start; }
+.segbtn { font-weight: 700; border: 0; border-radius: 999px; padding: 8px 22px; background: transparent; color: var(--muted); cursor: pointer; }
+.segbtn[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+
+/* 検索 */
+.search { background: var(--card); border: 1px solid var(--rule); border-radius: 14px; padding: 12px; display: grid; gap: 10px; }
+.fields { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.pair { display: grid; gap: 8px; }
+.field { position: relative; display: grid; gap: 2px; }
+.field label { font-size: .78rem; color: var(--muted); font-weight: 700; }
+.field input {
+  font: inherit; font-size: 1.05rem; width: 100%; padding: 10px 36px 10px 12px; border-radius: 10px;
+  border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink);
+}
+.field input:focus { border-color: var(--ink); outline: none; }
+.clear { position: absolute; right: 6px; bottom: 6px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; font-size: 1.1rem; }
+.swap { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink); cursor: pointer; font-size: 1.2rem; }
+.sugg { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--card); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,.18); max-height: 260px; overflow-y: auto; }
+.sugg[hidden] { display: none; }
+.sugg li { padding: 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+.sugg li small { color: var(--muted); }
+.sugg li[aria-selected="true"], .sugg li:hover { background: var(--unknown-bg); }
+.trip { font-size: .9rem; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.trip b { font-size: 1rem; }
+.hint { font-size: .82rem; color: var(--muted); margin: 0; }
+
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tabs[hidden] { display: none; }
+.tab { font-weight: 700; padding: 12px 8px; border-radius: 10px; cursor: pointer; border: 2px solid var(--rule); background: var(--card); color: var(--ink); line-height: 1.3; }
+.tab small { display: block; font-weight: 400; color: var(--muted); font-size: .78rem; }
+.tab[aria-selected="true"] { border-color: var(--ink); }
+
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; font-size: .9rem; }
+.count b { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.toggle { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--known); }
+
+ol.line { list-style: none; margin: 0; padding: 0; }
+.st { display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
+.rail { position: relative; }
+.rail::before { content: ""; position: absolute; left: 12px; top: 0; bottom: 0; width: 4px; background: var(--c); }
+.st:first-child .rail::before { top: 22px; }
+.st:last-child .rail::before { bottom: calc(100% - 22px); }
+.rail::after { content: ""; position: absolute; left: 5px; top: 13px; width: 18px; height: 18px; border-radius: 50%; background: var(--card); border: 4px solid var(--c); }
+.st.has .rail::after { background: var(--c); }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; display: grid; gap: 6px; }
+.st.here .card { border: 2px solid var(--ink); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.name { font-weight: 700; font-size: 1.1rem; }
+.lname { font-size: .78rem; color: var(--muted); }
+.tag { font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 6px; background: var(--ink); color: var(--card); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: .85rem; padding: 3px 9px; border-radius: 999px; background: var(--known-bg); color: var(--known); font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip.dir { background: transparent; border: 1.5px solid var(--ink); color: var(--ink); }
+.chip.ok { background: var(--known-bg); color: var(--known); }
+.chip.far { background: var(--warn-bg); color: var(--warn); }
+.chip.off { background: var(--unknown-bg); color: var(--muted); font-weight: 400; }
+.sub { font-size: .82rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.sub a { color: var(--keisei); }
+.empty { color: var(--muted); font-size: .9rem; padding: 12px 0; }
+
+footer { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 12px; display: grid; gap: 6px; }
+footer p { margin: 0; }
+footer a { color: var(--keisei); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>京成線・浅草線 トイレマップ</h1>
+    <p class="lead">国府台から上野・大門までの各駅のトイレ。個室の数とどちらのホームにあるかをまとめています。</p>
+  </header>
+
+  <div class="seg" role="radiogroup" aria-label="トイレの種類">
+    <button class="segbtn" role="radio" data-g="men">男性</button>
+    <button class="segbtn" role="radio" data-g="women">女性</button>
+  </div>
+
+  <section class="search" aria-label="駅を探す">
+    <div class="fields">
+      <div class="pair">
+        <div class="field">
+          <label for="from">いまいる駅</label>
+          <input id="from" type="text" inputmode="search" autocomplete="off" placeholder="例：あおと、青砥" aria-autocomplete="list" aria-controls="sugg-from">
+          <button class="clear" type="button" data-for="from" aria-label="いまいる駅を消す">×</button>
+          <ul class="sugg" id="sugg-from" role="listbox" hidden></ul>
+        </div>
+        <div class="field">
+          <label for="to">向かう駅</label>
+          <input id="to" type="text" inputmode="search" autocomplete="off" placeholder="例：しんばし、新橋" aria-autocomplete="list" aria-controls="sugg-to">
+          <button class="clear" type="button" data-for="to" aria-label="向かう駅を消す">×</button>
+          <ul class="sugg" id="sugg-to" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <button class="swap" id="swap" type="button" aria-label="いまいる駅と向かう駅を入れ替える">⇅</button>
+    </div>
+    <div class="trip" id="trip"></div>
+    <p class="hint" id="hint">ひらがなでも探せます。両方入れると、その間の駅を進む順に並べます。</p>
+  </section>
+
+  <div class="tabs" id="tabs" role="tablist" aria-label="区間">
+    <button class="tab" role="tab" data-route="ueno">国府台 → 京成上野<small>京成本線</small></button>
+    <button class="tab" role="tab" data-route="daimon">国府台 → 大門<small>押上線・都営浅草線経由</small></button>
+  </div>
+
+  <div class="bar">
+    <span class="count">内訳がわかっている駅 <b id="known">0</b> / <span id="total">0</span></span>
+    <label class="toggle"><input type="checkbox" id="only"><span>わかっている駅だけ表示</span></label>
+  </div>
+
+  <ol class="line" id="list"></ol>
+
+  <footer>
+    <p>個室の数は現地で確認したものです。「多機能トイレあり（公式）」は京成電鉄の公式サイトのバリアフリー一覧によるもので、男女共用の場合があるため、男性・女性のどちらにも表示しています。</p>
+    <p>「進む方向のホーム」「反対ホーム」は、検索した向きに乗るときのホームとの関係です。</p>
+    <p>駅の改修で変わることがあります。最新の配置は各社の構内図で確認してください：<a href="https://www.keisei.co.jp/keisei/tetudou/accessj/vmap/index.php">京成電鉄 駅構内図一覧</a> ／ <a href="https://www.kotsu.metro.tokyo.jp/">東京都交通局</a></p>
+    <p>2026年11月更新</p>
+  </footer>
+</main>
+
+<script>
+const K = "https://www.keisei.co.jp/keisei/tetudou/stationmap/pdf/jp/";
+// 駅の共通情報：line=路線 kana=読み official=公式で多機能トイレあり map=構内図
+// 男女別の情報は men / women に：w=和式 y=洋式 u=小便器(男性のみ) bf=バリアフリー個室 place=場所
+//   dir=ホームの表示名, toward=そのホームの電車が向かう側の駅名（"both"=両方向共通）
+const S = {
+  "国府台":     { kana: "こうのだい", line: "京成本線", official: true, map: K + "114.pdf" },
+  "江戸川":     { kana: "えどがわ", line: "京成本線", official: true, map: K + "113.pdf" },
+  "京成小岩":   { kana: "けいせいこいわ", line: "京成本線", official: true, map: K + "112.pdf" },
+  "京成高砂":   { kana: "けいせいたかさご", line: "京成本線", official: true, map: K + "111.pdf" },
+  "青砥":       { kana: "あおと", line: "京成本線・押上線", official: true, map: K + "110.pdf" },
+  "お花茶屋":   { kana: "おはなぢゃや おはなじゃや", line: "京成本線", official: true, map: K + "109.pdf" },
+  "堀切菖蒲園": { kana: "ほりきりしょうぶえん", line: "京成本線", official: true, map: K + "108.pdf" },
+  "京成関屋":   { kana: "けいせいせきや", line: "京成本線", official: true, map: K + "107.pdf" },
+  "千住大橋":   { kana: "せんじゅおおはし", line: "京成本線", official: true, map: K + "106.pdf" },
+  "町屋":       { kana: "まちや", line: "京成本線", official: true, map: K + "105.pdf" },
+  "新三河島":   { kana: "しんみかわしま", line: "京成本線", official: true, map: K + "104.pdf" },
+  "日暮里":     { kana: "にっぽり", line: "京成本線", official: true, map: K + "103.pdf" },
+  "京成上野":   { kana: "けいせいうえの", line: "京成本線", official: true, map: K + "101.pdf" },
+  "京成立石":   { kana: "けいせいたていし", line: "京成押上線", official: true, map: K + "211.pdf" },
+  "四ツ木":     { kana: "よつぎ", line: "京成押上線", official: true, map: K + "212.pdf" },
+  "八広":       { kana: "やひろ", line: "京成押上線", official: true, map: K + "213.pdf" },
+  "京成曳舟":   { kana: "けいせいひきふね", line: "京成押上線", official: true, map: K + "214.pdf" },
+  "押上":       { kana: "おしあげ", line: "京成押上線・都営浅草線", official: true, map: K + "215.pdf" },
+  "本所吾妻橋": { kana: "ほんじょあづまばし ほんじょあずまばし", line: "都営浅草線" },
+  "浅草":       { kana: "あさくさ", line: "都営浅草線" },
+  "蔵前":       { kana: "くらまえ", line: "都営浅草線" },
+  "浅草橋":     { kana: "あさくさばし", line: "都営浅草線", men: { dir: "共通（階段上）", toward: "both", bf: 1 } },
+  "東日本橋":   { kana: "ひがしにほんばし", line: "都営浅草線", men: { dir: "押上方面ホーム", toward: "押上", w: 1, y: 1 } },
+  "人形町":     { kana: "にんぎょうちょう", line: "都営浅草線" },
+  "日本橋":     { kana: "にほんばし", line: "都営浅草線" },
+  "宝町":       { kana: "たからちょう", line: "都営浅草線" },
+  "東銀座":     { kana: "ひがしぎんざ", line: "都営浅草線" },
+  "新橋":       { kana: "しんばし", line: "都営浅草線" },
+  "大門":       { kana: "だいもん", line: "都営浅草線" }
+};
+const common = ["国府台", "江戸川", "京成小岩", "京成高砂", "青砥"];
+const R = {
+  ueno: common.concat(["お花茶屋", "堀切菖蒲園", "京成関屋", "千住大橋", "町屋", "新三河島", "日暮里", "京成上野"]),
+  daimon: common.concat(["京成立石", "四ツ木", "八広", "京成曳舟", "押上", "本所吾妻橋", "浅草", "蔵前", "浅草橋", "東日本橋", "人形町", "日本橋", "宝町", "東銀座", "新橋", "大門"])
+};
+const ALL = Object.keys(S);
+
+let gender = "men", route = "ueno", from = null, to = null;
+const info = s => (s[gender] || {});
+const hasCounts = s => ["w", "y", "u", "bf"].some(k => info(s)[k] != null);
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const kata2hira = t => t.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+
+// 2駅の間の駅を進む順に返す（青砥で上野側と大門側が分かれる）
+function path(a, b) {
+  for (const r of ["ueno", "daimon"]) {
+    const l = R[r], i = l.indexOf(a), j = l.indexOf(b);
+    if (i >= 0 && j >= 0) return i <= j ? l.slice(i, j + 1) : l.slice(j, i + 1).reverse();
+  }
+  // 片方が上野側、もう片方が大門側：青砥で乗り換え
+  return path(a, "青砥").concat(path("青砥", b).slice(1));
+}
+// その駅のトイレのホームが、進む向きと同じかどうか
+function sideOf(name, seq) {
+  const g = info(S[name]);
+  if (!g.toward) return null;
+  if (g.toward === "both") return "both";
+  const i = seq.indexOf(name);
+  const next = seq[i + 1] || null, prev = seq[i - 1] || null;
+  const lst = R.daimon.includes(name) && R.daimon.includes(g.toward) ? R.daimon : R.ueno;
+  const here = lst.indexOf(name), tw = lst.indexOf(g.toward);
+  const ref = next || prev;
+  if (!ref || lst.indexOf(ref) < 0 || tw < 0) return null;
+  let forward = Math.sign(lst.indexOf(ref) - here);
+  if (!next) forward = -forward; // 終点では来た向き
+  return Math.sign(tw - here) === forward ? "same" : "opposite";
+}
+
+function card(name, seq) {
+  const s = S[name];
+  const g = info(s);
+  const color = s.line.startsWith("都営") ? "var(--asakusa)" : "var(--keisei)";
+  const chips = [];
+  if (g.dir) chips.push(`<span class="chip dir">${esc(g.dir)}</span>`);
+  if (seq) {
+    const side = sideOf(name, seq);
+    if (side === "both") chips.push(`<span class="chip ok">どちらのホームからも</span>`);
+    if (side === "same") chips.push(`<span class="chip ok">進む方向のホーム</span>`);
+    if (side === "opposite") chips.push(`<span class="chip far">反対ホーム</span>`);
+  }
+  if (g.w != null) chips.push(`<span class="chip">和式 ${g.w}</span>`);
+  if (g.y != null) chips.push(`<span class="chip">洋式 ${g.y}</span>`);
+  if (gender === "men" && g.u != null) chips.push(`<span class="chip">小便器 ${g.u}</span>`);
+  if (g.bf != null) chips.push(`<span class="chip">バリアフリー ${g.bf}</span>`);
+  if (!hasCounts(s)) chips.push(`<span class="chip off">個室の内訳 未調査</span>`);
+  const sub = [];
+  if (g.place) sub.push(esc(g.place));
+  if (s.official) sub.push("多機能トイレあり（公式）");
+  if (s.map) sub.push(`<a href="${s.map}">構内図（PDF）</a>`);
+  let tag = "";
+  if (seq && name === seq[0]) tag = `<span class="tag">いまここ</span>`;
+  else if (seq && name === seq[seq.length - 1]) tag = `<span class="tag">到着</span>`;
+  else if (!seq && (name === from || name === to)) tag = `<span class="tag">${name === from ? "いまここ" : "向かう駅"}</span>`;
+  const here = tag ? " here" : "";
+  return `<li class="st${hasCounts(s) ? " has" : ""}${here}" id="st-${esc(name)}" style="--c:${color}">
+    <div class="rail" aria-hidden="true"></div>
+    <div class="card">
+      <div class="head"><span class="name">${esc(name)}</span>${tag}<span class="lname">${esc(s.line)}</span></div>
+      <div class="chips">${chips.join("")}</div>
+      ${sub.length ? `<div class="sub">${sub.map(x => `<span>${x}</span>`).join("")}</div>` : ""}
+    </div>
+  </li>`;
+}
+
+const $ = id => document.getElementById(id);
+const list = $("list"), only = $("only");
+
+function render() {
+  const seq = from && to && from !== to ? path(from, to) : null;
+  const names = seq || R[route];
+  $("tabs").hidden = !!seq;
+  const shown = only.checked ? names.filter(n => hasCounts(S[n]) || (seq && (n === from || n === to))) : names;
+  $("known").textContent = names.filter(n => hasCounts(S[n])).length;
+  $("total").textContent = names.length;
+  list.innerHTML = shown.length ? shown.map(n => card(n, seq)).join("") : `<li class="empty">内訳がわかっている駅はまだありません。</li>`;
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.route === route ? "true" : "false"));
+  document.querySelectorAll(".segbtn").forEach(b => b.setAttribute("aria-checked", b.dataset.g === gender ? "true" : "false"));
+  if (seq) {
+    const known = seq.slice(1).filter(n => hasCounts(S[n]));
+    $("trip").innerHTML = `<span><b>${esc(from)} → ${esc(to)}</b>　${seq.length - 1}駅先</span>` +
+      (known.length ? `<span>途中で内訳がわかる駅：${known.map(esc).join("、")}</span>` : "");
+    $("hint").hidden = true;
+  } else {
+    $("trip").innerHTML = "";
+    $("hint").hidden = false;
+    // 片方だけ入れたときはその駅までスクロール
+    const one = from || to;
+    if (one) {
+      if (!R[route].includes(one)) { route = R.ueno.includes(one) ? "ueno" : "daimon"; return render(); }
+      const el = document.getElementById("st-" + one);
+      if (el) el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }
+  }
+  try { localStorage.setItem("toiletmap", JSON.stringify({ from, to })); } catch (e) {}
+}
+
+// 駅名の入力と候補
+function matches(q) {
+  q = kata2hira(q.trim());
+  if (!q) return ALL;
+  return ALL.filter(n => n.includes(q) || S[n].kana.split(" ").some(k => k.includes(q)));
+}
+function setupField(key) {
+  const input = $(key), box = $("sugg-" + key);
+  let items = [], active = -1;
+  const show = () => {
+    items = matches(input.value);
+    active = items.length ? 0 : -1;
+    box.innerHTML = items.length
+      ? items.map((n, i) => `<li role="option" id="${key}-o${i}" aria-selected="${i === active}" data-n="${esc(n)}">${esc(n)}<small>${esc(S[n].line)}</small></li>`).join("")
+      : `<li aria-disabled="true">見つかりません</li>`;
+    box.hidden = false;
+  };
+  const pick = n => {
+    input.value = n; box.hidden = true;
+    if (key === "from") from = n; else to = n;
+    render();
+    if (key === "from" && !to) $("to").focus();
+  };
+  input.addEventListener("focus", show);
+  input.addEventListener("input", () => {
+    if (key === "from") from = null; else to = null;
+    show();
+  });
+  input.addEventListener("keydown", e => {
+    if (box.hidden) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      active = (active + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      box.querySelectorAll("li").forEach((li, i) => li.setAttribute("aria-selected", i === active));
+    } else if (e.key === "Enter" && active >= 0) { e.preventDefault(); pick(items[active]); input.blur(); }
+    else if (e.key === "Escape") box.hidden = true;
+  });
+  box.addEventListener("mousedown", e => e.preventDefault());
+  box.addEventListener("click", e => { const li = e.target.closest("li[data-n]"); if (li) { pick(li.dataset.n); input.blur(); } });
+  input.addEventListener("blur", () => {
+    box.hidden = true;
+    // 候補を選ばずに離れたら、完全一致か候補1件ならそれを採用
+    const m = matches(input.value);
+    const exact = ALL.find(n => n === input.value.trim());
+    const n = exact || (input.value.trim() && m.length === 1 ? m[0] : null);
+    if (n) { input.value = n; if (key === "from") from = n; else to = n; render(); }
+    else if (!input.value.trim()) { if (key === "from") from = null; else to = null; render(); }
+  });
+}
+setupField("from");
+setupField("to");
+document.querySelectorAll(".clear").forEach(b => b.addEventListener("click", () => {
+  $(b.dataset.for).value = "";
+  if (b.dataset.for === "from") from = null; else to = null;
+  render();
+}));
+$("swap").addEventListener("click", () => {
+  [from, to] = [to, from];
+  $("from").value = from || ""; $("to").value = to || "";
+  render();
+});
+
+// URLの # で区間と男女を共有できる（例：#daimon-women）
+function fromHash() {
+  const [r, g] = location.hash.slice(1).split("-");
+  if (R[r]) route = r;
+  gender = g === "women" ? "women" : "men";
+  render();
+}
+function go(r, g) {
+  const h = r + "-" + g;
+  if (location.hash !== "#" + h) location.hash = h; else { route = r; gender = g; render(); }
+}
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => go(b.dataset.route, gender)));
+document.querySelectorAll(".segbtn").forEach(b => b.addEventListener("click", () => go(route, b.dataset.g)));
+only.addEventListener("change", render);
+window.addEventListener("hashchange", fromHash);
+
+try {
+  const saved = JSON.parse(localStorage.getItem("toiletmap") || "{}");
+  if (S[saved.from]) { from = saved.from; $("from").value = from; }
+  if (S[saved.to]) { to = saved.to; $("to").value = to; }
+} catch (e) {}
+fromHash();
+</script>
+</body>
+</html>
