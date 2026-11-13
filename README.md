@@ -8,4 +8,6 @@
 
 ## 公開
 
-GitHub Pages（`main` ブランチのルート）で公開しています。
+https://keisei-toilet-map.pokapon.com/
+
+VPS 上の Coolify で動かしています。`main` に push すると自動でデプロイされます（`Dockerfile` で nginx 配信、ポート 8080）。
